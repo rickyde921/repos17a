@@ -1,0 +1,648 @@
+/* 
+ * File:   main.cpp
+ * Author: rcc
+ *
+ * Created on October 21, 2015, 12:41 PM
+ */
+
+#include <cstdlib>
+#include <iostream>
+#include <ctime>
+#include <iomanip>
+#include <cstring>
+
+using namespace std;
+
+int const POSCARDS = 7;
+
+struct Player {
+    int card1;      //holds value of first card
+    int card2;      //holds value of second card
+    bool comp;    //Holds the computer's name
+    string name;
+    int chips;      //player chips used to gamble
+    int sevenC [7];     //all 7 possible cards a player can use to obtain a game
+    int totBet;     //total betting amount within a game
+    int needed;     //amount needed to call
+    int currBet;    //current betting round bet
+    string status;
+};
+
+/*
+ * 
+ */
+void initPlyer(Player &, Player &, Player &, Player &, Player &);  //Initializes computer stats
+
+void chosePlayers(int, Player [], int, Player [] );
+
+int choseOrder(Player[], int, int[], int, int);  //Decides order of game at start
+
+void initDeck(int [],int const);
+
+string faceValue(int);             //returns face value of cards
+
+string suit (int);                 //returns suit of cards
+
+void swap(int[], int, int);        //Swaps two positions within an array
+
+int draw(int[], int &);       //draws a card from the deck
+
+int findHighest(Player[], int);    //Looks for highest card for deciding who is first   
+
+int gameValue(int);               //returns a card's game value using deck index
+ 
+int firstEnd(int, int);              //determines new location for ending position in betting phase
+
+void clearScreen();                 //clears screen by outputting 50 endl
+
+void deal(Player [],int, int [], int &,int); //deals 2 cards too every player
+
+void initSevenC(Player &p);         //initializes 7 possible cards a player can chose from to -10
+
+void addToSeven(Player &, int);     //Adds a card to SevenC array
+
+int converter (string);             //converts string to number
+
+void newEnd(int currPos, int &end, int size);   //finds a new ending point after someone raises
+
+//makes a player decide if they chose to call/check, fold, or raise
+void decide(Player [],int  &,int ,int [],int &, int &,int); 
+     
+int main(int argc, char** argv) {
+    
+    srand(time(0));
+    
+    bool valid = false;
+    while (valid == false){
+        cout<<"Would you like to hear the rules or are you ready to play?"<<endl
+            <<"1)Hear rules"<<endl<<"2)Play Game"<<endl;
+        string rules; //used to decide if program will output rules or play game
+        cin>>rules; 
+         if (rules == "1"){
+            cout<<"//RULES"<<endl;
+            valid = true;
+        }
+        else if (rules == "2"){
+            cout<<"Okay, let us begin"<<endl;
+            valid = true;
+        }
+        else {
+            cout<<"*****INVALID RESPONSE*****"<<endl
+                 <<"Please enter 1 or 2 only"<<endl;
+        }
+    }
+    
+    //Creates empty Players
+    Player james;
+    Player cynthia;
+    Player ricky;
+    Player stacy;
+    Player user;
+    
+    //Initialize Computer Player Statistics
+    initPlyer(james, cynthia, ricky, stacy, user);
+    string numCom;         //Number of computer players desired
+    int const totComp = 4; //Represents total number of possible computers
+    
+    do{
+       valid = true;  //Will be used for input validation
+       cout<<"How many computer players would you like to add?"<<endl
+           <<"Enter a number between 1 and "<<totComp<<endl;;
+       cin>>numCom;
+       if(numCom.size()!=1)valid = false; //If input was larger than 1 character
+       else if (numCom[0] < '0' || numCom[0] > '4')valid = false; //Out of given range
+      }while(valid==false);
+    
+    int compPlay = (numCom[0] - 48);
+    cout<<compPlay<<endl;//Integer equal to # of computers playing
+    Player *allPlayers= new Player[compPlay+1];//Creates an array of size equal to # of computer 
+                                      //players that will play + the user
+    //Creates an array of total computers to ease passing as parameter
+    Player totalC[totComp]= {james, cynthia, ricky, stacy};   
+    chosePlayers(totComp, totalC, compPlay, allPlayers); //Allow the user to decide who will play
+    
+    user.name = "Subject"; //sets user name
+    *(allPlayers+compPlay)= user;//sets final value in array to user
+    
+    
+    cout<<"These are the players that will be playing "<<endl;
+        for (int i=-0; i<compPlay+1; i++){     //Displays all players that will be playing
+        cout<<allPlayers[i].name<<endl;
+    }
+    
+    //Initialize deck
+    int const deckSz = 104;
+    int deck [deckSz];          //Creates a static array to hold 2 decks
+    int capacity = deckSz;    //Will be used to keep used and unused cared apart
+    initDeck(deck, deckSz);
+   
+    cout<<"First card is "<<faceValue(deck[0])<<" "<<suit(deck[0])<<endl;
+    cout<<"Last card is "<<faceValue(deck[deckSz-1])<<" "<<suit(deck[deckSz-1])<<endl;
+    
+    int aPSize = compPlay+1;    //equal to size of allPlayers array
+    int endPos = choseOrder(allPlayers, aPSize, deck, deckSz, capacity); //current position of player who
+                                                                         // ends betting round(bigBlind)
+    //cout<<"The big blind is "<<allPlayers[endPos].name;
+    
+    int start;  //starting position of betting phase
+    if (endPos == aPSize -1)start=0;    //if end player is final element, start is first element
+    else start = endPos +1;             //else, start player is element after end player
+    
+    cout<<"This will be the initial order of the game"<<endl;
+    int listPs = start;
+    for (int i = 0; i<aPSize; i++){
+        if (listPs == aPSize){
+            listPs=0;//if next element is out of bonds, return to start of array
+            cout<<allPlayers[listPs].name<<endl;
+             listPs++;       //else increment list position
+        }
+        else{
+            cout<<allPlayers[listPs].name<<endl;
+            listPs++;       //else increment list position
+        }
+    }
+    cout<<"Are you ready to begin?"<<endl;
+    string ready;
+    
+    do{
+        cout <<"Enter 1 to begin game"<<endl;
+        //Initialize player chips
+        
+        valid = true;   //will be used for input verification
+        cin>>ready;
+        if(ready.size()!=1)valid = false;
+        else if (ready[0] !='1')valid = false;
+    }while(valid==false);
+    
+    clearScreen();  //clear screen
+    //Deal cards to all players
+    deal(allPlayers,aPSize, deck, capacity, start);
+    //Initialize pot
+    int pot [aPSize-1];
+    int potLoc = 0;         //Location of current pot
+    int sBlind = 1;
+    int bBlind = 2;
+    int currBet = bBlind;        //current bet amount
+    int currPos = start;    //current position
+    bool finished = false;  //if last player finished betting
+//    do{     //execute while betting phase is not yet over
+//       // decide(allPlayers, currPos, currBet, pot, &potLoc);
+//    } while (!finished);
+//        
+    
+    
+    delete[] allPlayers;
+    
+    return 0;
+}
+/*******************************************************************************/
+
+
+
+void initPlyer(Player &james, Player &cynthia, Player &ricky, Player &stacy, Player &user){
+    james.comp = true;
+    james.name = "James";
+    james.card1 = -1;
+    james.card2 = -1;
+    james.chips = 100;
+    initSevenC(james);
+    james.totBet = 0;
+    james.needed = 0;
+    james.currBet = 0;
+    
+    cynthia.comp = true;
+    cynthia.name = "Cynthia";
+    cynthia.card1 = -1;
+    cynthia.card2 = -1;
+    cynthia.chips = 100;
+    initSevenC(cynthia);
+    cynthia.totBet = 0;
+    cynthia.needed = 0;
+    cynthia.currBet = 0;
+    
+    ricky.comp = true;
+    ricky.card1 = -1;
+    ricky.card2 = -1;
+    ricky.name = "Ricky";
+    ricky.chips = 100;
+    initSevenC(ricky);
+    ricky.totBet = 0;
+    ricky.needed = 0;
+    ricky.currBet = 0;
+    
+    stacy.comp = true;
+    stacy.name = "Stacy";
+    stacy.card1 = -1;
+    stacy.card2 = -1;
+    stacy.chips = 100;
+    initSevenC(stacy);
+    stacy.totBet = 0;
+    stacy.needed = 0;
+    stacy.currBet = 0;
+    
+    user.comp = false;
+    user.card1 = -1;
+    user.card2 = -1;
+    user.chips = 100; 
+   initSevenC(user);   
+    user.totBet = 0;
+    user.needed = 0;
+    user.currBet = 0;
+}
+
+ void chosePlayers(int totComp, Player totalC[] , int compPlay, Player allPlayers[] ){
+     for (int i = 0; i<compPlay; i++){   //Will loop until you have chosen as many players as compPlay
+         cout<<"Who would you like to add to the game? ("<<compPlay-i<<")remaining"<<endl;
+         for (int j = 0; j<totComp-i; j++){//Will loop so all computers left are displayed
+             cout<<j+1<<") "<<totalC[j].name<<endl;
+         }
+         string chose; //variable used to chose the computer that will be added to game
+         bool valid; //Will be used for input validation
+         do{
+             valid = true;
+             cout<<"Please chose a computer player"<<endl;
+             cin>>chose;
+             int choice = chose[0] - 48;
+             if (chose.length()!=1)valid = false;   //if input is larger than 1 char
+             if (chose[0]<'0' || chose[0]-48>totComp-i)valid = false; //out of range
+//             cout<<"max "<<totComp-i<<endl;
+//             cout<<"My choice "<<chose[0]<<endl;
+         }while(valid == false);
+    
+         allPlayers[i] = totalC[chose[0]-48-1]; //Adds chosen computer to allPlayers array
+         totalC[(chose[0]-48)-1] = totalC[totComp-1-i]; //Replaces chosen name for last element 
+        
+         
+     }
+     clearScreen();
+     }
+ 
+ int choseOrder(Player allPlayers[], int size, int deck[],int dSize, int c){
+     cout<<"Every body will draw a card. Whoever draws the biggest card will "
+         <<" obtain the blind last. "<<endl
+         <<"If twp players draw a card of the same value, suits will"<<endl
+         <<"be prioritized by the following order; Spades, Hearts, Clubs, Diamonds"<<endl;
+     int capacity = 52;
+     for (int i = 0; i<size; i++){
+         if (allPlayers[i].card1 == -1){
+             allPlayers[i].card1 = draw(deck, capacity);
+             
+         }
+     }
+     int highest = findHighest(allPlayers, size);
+     
+     cout<<"Cards Drawn "<<endl<<"-----------"<<endl;
+     for (int i = 0; i<size; i++){
+         cout<<allPlayers[i].name<<")"<<faceValue(allPlayers[i].card1)
+             <<" "<<suit(allPlayers[i].card1)<<endl;   //Outputs players and cards
+     }
+     cout<<endl;
+     int endPos = -1;   //Position of ending player in a betting phase
+     int winners = 0;   //number of winners
+     
+     for (int i = 0; i<size; i++){  //checks how many players have the highest card
+         if (gameValue(allPlayers[i].card1) == highest){
+             winners++;     //a winner found
+             endPos = firstEnd(size, i);
+             
+         }
+         
+     }
+     
+     if (winners > 1){     //if more than one winner was found
+         int realWin = 53;      //will be position of the real winner 
+        for (int i = 0; i<size; i++){   //
+            if (gameValue(allPlayers[i].card1) == highest){   //if is a winning player
+                if(allPlayers[i].card1< realWin){             //if player card is better than current best
+                    realWin = allPlayers[i].card1;  
+                    endPos = firstEnd(size,i);
+                }
+            }
+        } 
+     }
+     
+     return endPos;
+ }
+ 
+ void initDeck(int deck[],int const deckSz){
+     for (int i = 0; i<deckSz; i++){    //Fills deck
+         deck[i]= i%52;
+     }
+    }
+ 
+ string faceValue(int deckValue){
+     int faceV = deckValue % 13;
+     string card;
+     if (faceV == 0){
+         card = "A";
+     }
+     else if (faceV > 0 && faceV < 9) {    //If card is 2-99
+         card = (faceV+48 + 1);
+     }
+     else if (faceV>8 && faceV<13){        //if card is 10, Jack, Queen, or King
+         if (faceV==9)card = "10";
+         if (faceV==10)card = "J";
+         if (faceV == 11)card = "Q";
+         if (faceV == 12)card = "K";
+     }
+     else {
+         card = "XXX";      //Error
+     }
+     return card;
+ }
+ 
+ string suit (int deckValue){
+     string suit;
+     if (deckValue /13 == 0) suit = "Spades";
+     else if (deckValue / 13 == 1) suit = "Hearts";
+     else if (deckValue / 13 == 2) suit = "Clubs";
+     else if (deckValue / 13 == 3) suit = "Clubs";
+     else {
+         suit = "XXXX";
+     }
+     return suit;
+ }
+ 
+ int draw(int deck[],int &capacity){
+  
+     int pos = rand() % capacity;
+     int drawnCard = deck[pos];     //value of randomely chosen card
+     swap (deck, pos, capacity-1);
+     capacity--;                    //decrement capacity to keep two sections apart
+     
+     return drawnCard;
+ }
+ 
+ void swap(int deck[], int pos1, int pos2){
+     int temp = deck[pos1];
+     deck[pos1] = deck[pos2];
+     deck[pos2] = temp;
+ }
+        
+ int findHighest(Player allPlayers[], int size){
+     int highest = -1;
+     for (int i = 0; i<size; i++){  //Loops to check all player's cards
+         if(gameValue(allPlayers[i].card1) > highest)highest = gameValue(allPlayers[i].card1); //replace if higher
+     }
+     return highest;
+ }
+         
+ int gameValue(int deckValue){
+     int gameV = deckValue % 13;
+     if (gameV == 0){    //If card is an A
+         gameV = 14;    //Ace is worth the most
+     }
+     else if (gameV > 0 && gameV<13){   //If card is between 2-K
+         gameV = gameV + 1;    
+     }
+     else {
+         gameV = -1;   //Error
+     }
+     
+     return gameV;
+  
+ }
+ 
+ int firstEnd(int size, int pos){     //finds position of player that closes the bet round 
+     int end = pos;  //Position of new ending point
+     if (size == 2){                //if only two players (user included) are playing
+         if(end == 0)end = 1;
+         else if (end == 1)end = 0;
+     }
+     else {
+        for (int i = 0; i<2; i++){ //will loop twice, adding 2 to the counter
+            if (end == size-1){        //if you are in the last element in the array
+                end = 0;               //loop back to begining
+            }
+            else{
+                end++;                 //else, increment position
+            }
+        }
+     }
+     return end;
+ }
+ 
+ void clearScreen(){
+     for (int i = 0; i<50; i++){
+         cout<<endl;
+     }
+ }
+ 
+ void deal(Player allPlayers[],int size, int deck[], int &capacity,int start){
+     for (int i = 0; i<size; i++){
+      allPlayers[i].card1 = draw(deck, capacity);  //draws a random card within unused side of array 
+      addToSeven(allPlayers[i], allPlayers[i].card1);//adds drawn card to 7 card array of user
+     }
+       for (int i = 0; i<size; i++){
+      allPlayers[i].card2 = draw(deck, capacity);  //draws a random card within unused side of array 
+      addToSeven(allPlayers[i], allPlayers[i].card2);//adds drawn card to 7 card array of user
+     }
+     
+ }
+ 
+void decide(Player allPlayers[],int  &currPos,int currBet,int pot[],int &potLoc, int &end, int size){
+    if(allPlayers[currPos].comp == true){   //if player is a computer player
+        
+    }
+    else {                                  //if player is user
+        //sets needed amount to call equal to current bet - user's current bet this round
+        allPlayers[currPos].needed = currBet - allPlayers[currPos].currBet;
+        if (allPlayers[currPos].needed >=allPlayers[currPos].chips){ //If player must go all in to call
+            if(allPlayers[currPos].status != "Fold"){
+                
+            }
+        }
+        else {      //if player can check or call
+                if (allPlayers[currPos].status != "Fold"){  //only execute if player has not folded
+                string choice;  //will be used to chose what will be done
+                bool valid = true;  //will be used for input validation
+                do {
+                    cout<<"What would you like to do?"<<endl;
+                    if (allPlayers[currPos].needed == 0){   //if player needs to just check
+                        cout<<"1)Check"<<endl;
+                    }
+                    else {      //if player needs to call
+                        cout<<"1)Call ("<<allPlayers[currPos].needed<<") "<<endl;
+                    }
+                    cout<<"2)Fold"<<endl<<"3)Raise"<<endl;  //display final options
+
+                    cin>>choice;
+                    if (choice.length() !=1)valid = false;    //if input is more than 1 char
+                    else if (choice[0] < '0' || choice[0]>'3')valid = false;//if bad input
+                }while (valid == false);
+
+                //Execute player option
+                if(choice[0] == '1'){   //if user checked or called
+                    allPlayers[currPos].chips -= allPlayers[currPos].needed; //subtracts call from chips
+                    allPlayers[currPos].totBet += allPlayers[currPos].needed;//adds to total bet this game
+                    pot[potLoc] += allPlayers[currPos].needed;  //adds call/check to pot
+                    allPlayers[currPos].currBet += allPlayers[currPos].needed; //adds to current round bet
+                    allPlayers[currPos].needed = 0;             //reset needed amount to 0
+                    allPlayers[currPos].status = "Call";
+                }
+                else if (choice[0] == '2'){     //if user chose to fold
+                    allPlayers[currPos].totBet = 0;
+                    allPlayers[currPos].currBet = 0;
+                    allPlayers[currPos].needed = 0;     
+                    allPlayers[currPos].status = "Fold";
+                }
+                else if (choice[0]=='3'){       //if user wants to raise
+                    //first makes the player call the current bet
+                    allPlayers[currPos].chips -= allPlayers[currPos].needed; //subtracts call from chips
+                    allPlayers[currPos].totBet += allPlayers[currPos].needed;//adds to total bet this game
+                    pot[potLoc] += allPlayers[currPos].needed;  //adds call/check to pot
+                    allPlayers[currPos].currBet += allPlayers[currPos].needed; //adds to current round bet
+                    allPlayers[currPos].needed = 0;             //reset needed amount to 0
+                    allPlayers[currPos].status = "Call";
+                    
+                    //rasing
+                    bool valBet = true;    //used for input validation
+                    string betAmt = 0;      //raise amount
+                    do {
+                        cout<<"How much would you like to bet?"<<endl;
+                        cout<<"Enter 0 if you chose to check"<<endl;
+                        cin>>betAmt;
+                        if(converter(betAmt) <0)valBet = false;
+                        else if (converter(betAmt) > allPlayers[currPos].chips){
+                            valid = false;
+                            cout<<"Please enter a bet smaller than your chip amount"<<allPlayers[currPos].chips<<endl;
+                        }
+                        else{   //if proper bet was entered
+                            currBet += converter(betAmt);   //increment current bet for round
+                            allPlayers[currPos].chips -= converter(betAmt); //subtracts call from chips
+                            allPlayers[currPos].totBet += converter(betAmt);//adds to total bet this game
+                            pot[potLoc] += converter(betAmt);  //adds call/check to pot
+                            allPlayers[currPos].currBet += converter(betAmt); //adds to current round bet
+                            allPlayers[currPos].needed = 0;             //reset needed amount to 0
+                            allPlayers[currPos].status = "Raise";
+                            newEnd(currPos, end, size);     //changes ending position to player before
+                           
+                        }
+                    }while (!valBet);   //while user hasn't entered a valid bet
+                }
+            }
+        }//end of if player can check or call
+    }//if player is user
+}
+
+
+void initSevenC(Player &player){
+ for (int i = 0; i<POSCARDS; i++){
+     player.sevenC[i] = -10;    //sets all values in array to -10
+ }
+
+}
+
+void addToSeven(Player &player, int value){
+    bool found = false;
+    int i = 0;
+    while (!found){     //loop until an empty slot is found
+      if (player.sevenC[i] == -10){     //if card slot is empty
+          player.sevenC[i] = value;
+          found = true;
+      }
+      else i++;         //else, increment i 
+    }
+    }
+
+int converter (string num)
+{
+
+int placeHolder;
+    int addOn;
+    int multiplier = 1;
+    int returnThis = 0;;
+    
+    for (int i = 0; i<num.size(); i++)
+    {
+        char zerois48 = num[num.size()-1-i];
+        int number = zerois48;
+        
+        if (number == 49)
+        {
+            placeHolder = 1;
+        }
+        
+        else if (number == 50)
+        {
+            placeHolder = 2;
+        }
+        
+        else if (number == 51)
+        {
+            placeHolder = 3;
+        }
+        
+        else if (number == 52)
+        {
+            placeHolder = 4;
+        }
+        
+        else if (number == 53)
+        {
+            placeHolder = 5;
+        }
+        
+        else if (number == 54)
+        {
+            placeHolder = 6;
+        }
+        
+        else if (number == 55)
+        {
+            placeHolder = 7;
+        }
+        
+        else if (number == 56)
+        {
+            placeHolder = 8;
+        }
+        
+        else if (number == 57)
+        {
+            placeHolder = 9;
+        }
+        
+        else if(number == 48)
+        {
+            placeHolder = 0;
+        }
+        
+        else 
+        {
+            placeHolder = -2;
+        }
+        
+        if (i >0)
+        {
+            multiplier = multiplier * 10;
+        }
+        
+        if (placeHolder > -1)
+        {
+            addOn = placeHolder * multiplier;
+            returnThis = returnThis + addOn;
+        }
+        
+        else
+        {
+            returnThis = -1;
+        }
+        
+       
+    
+    }
+    
+    return returnThis;
+}
+
+void newEnd(int currPos, int &end, int size){
+    
+    if (currPos == size-1){        //if you are in the last element in the array
+                currPos = 0;               //loop back to begining
+            }
+            else{
+                currPos++;                 //else, increment position
+            }
+    end = currPos;                  //
+}
